@@ -9,10 +9,13 @@ export const dynamic = "force-dynamic";
 // 사용자가 화면에서 "AI로 다듬기"를 누르면, 지금 저장되어 있는 초안 텍스트를
 // 더 읽기 쉽게 다시 쓰게 한다. 섹션 개수·순서·이미지는 그대로 두고 글자만 다듬는다.
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string; draftId: string }> },
 ) {
   const { id, draftId } = await params;
+  const body = await req.json().catch(() => ({}));
+  const instruction: string | undefined = typeof body?.instruction === "string" ? body.instruction : undefined;
+
   const db = getDb();
 
   const draftRow = db
@@ -23,7 +26,7 @@ export async function POST(
   }
 
   const draft: Draft = { title: draftRow.title, sections: JSON.parse(draftRow.body_json) };
-  const result = await polishDraftText(draft);
+  const result = await polishDraftText(draft, instruction);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 502 });
   }

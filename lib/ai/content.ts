@@ -143,6 +143,7 @@ type TextBearingSection = Extract<DraftSection, { type: "heading" | "paragraph" 
 
 export async function polishDraftText(
   draft: Draft,
+  instruction?: string,
 ): Promise<{ ok: true; draft: Draft } | { ok: false; error: string }> {
   const editable = draft.sections
     .map((s, i) => ({ s: s as TextBearingSection, i }))
@@ -153,13 +154,16 @@ export async function polishDraftText(
   if (editable.length === 0) return { ok: true, draft };
 
   const listing = editable.map(({ s, i }) => `${i} (${s.type}): ${s.text}`).join("\n");
+  const customNote = instruction?.trim()
+    ? `\n사용자가 추가로 요청한 스타일: "${instruction.trim()}" — 이 요청을 최우선으로 반영하라.`
+    : "";
   const prompt = `다음은 네이버 블로그 글의 문단·소제목·인용구들이다. 각 항목을 더 읽기 쉽게 다듬어라.
 - 사실이나 숫자를 새로 지어내지 마라. 원문에 있는 내용만 자연스럽게 다듬는다.
-- 문장을 짧게 끊고, 어색하거나 늘어지는 표현을 고쳐라. 전체적인 뜻과 어투(구어체/전문가체 등)는 유지하라.
+- 문장을 짧게 끊고, 어색하거나 늘어지는 표현을 고쳐라. 전체적인 뜻은 유지하라(어투는 사용자 요청이 있으면 그에 맞춘다).
 - quote 항목은 15~30자의 짧은 한 줄을 유지하라.
 - paragraph 항목의 highlight 는, 다듬은 뒤의 text 안에 실제로 있는 문구만 적어라. 강조할 게 마땅치 않으면 생략하라.
 - 마크다운 기호(**, ~~, #, >, 백틱, - 목록)는 쓰지 마라.
-- 반드시 아래 모든 index를 하나도 빠짐없이 포함해 응답하라.
+- 반드시 아래 모든 index를 하나도 빠짐없이 포함해 응답하라.${customNote}
 
 ${listing}
 

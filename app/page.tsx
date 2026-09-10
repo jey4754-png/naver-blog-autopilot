@@ -491,6 +491,7 @@ function JobDetailView({
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editSections, setEditSections] = useState<DraftSection[]>([]);
+  const [polishInstruction, setPolishInstruction] = useState("");
   const [busy, setBusy] = useState<"save" | "republish" | "polish" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -544,7 +545,11 @@ function JobDetailView({
     try {
       const res = await jsonFetch<{ title: string; sections: DraftSection[] }>(
         `/api/jobs/${detail.job.id}/drafts/${draft.id}/polish`,
-        { method: "POST" },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ instruction: polishInstruction }),
+        },
       );
       setEditSections(res.sections);
     } catch (e) {
@@ -640,6 +645,16 @@ function JobDetailView({
               {editSections.map((s, i) => (
                 <SectionEditor key={i} section={s} onChange={(patch) => updateSection(i, patch)} onRemove={() => removeSection(i)} />
               ))}
+
+              <div className="field">
+                <label>AI로 다듬을 때 원하는 스타일 (선택, 비워두면 기본으로 다듬습니다)</label>
+                <input
+                  type="text"
+                  placeholder="예: 그림일기처럼 짧고 쉬운 문장으로, 아이에게 말하듯이"
+                  value={polishInstruction}
+                  onChange={(e) => setPolishInstruction(e.target.value)}
+                />
+              </div>
 
               <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                 <button className="btn" onClick={() => setEditing(false)} disabled={busy !== null}>
