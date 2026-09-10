@@ -1,0 +1,45 @@
+{
+  "name": "naver-blog-autopilot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 4123",
+    "build": "next build",
+    "start": "next start -p 4123",
+    "typecheck": "tsc --noEmit",
+    "test:db": "tsx scripts/test-db.ts",
+    "test:neurons": "tsx scripts/test-neurons.ts",
+    "test:cfusage": "tsx scripts/test-cfusage.ts",
+    "test:schema": "tsx scripts/test-schema.ts",
+    "test:sanitize": "tsx scripts/test-sanitize.ts",
+    "test:markdown": "tsx scripts/test-markdown.ts",
+    "test:trends": "tsx scripts/test-trends.ts",
+    "test:guards": "tsx scripts/test-guards.ts",
+    "test:selectors": "tsx scripts/test-selector-specificity.ts",
+    "test:images": "tsx scripts/test-images.ts",
+    "test:claude": "tsx scripts/test-claude.ts",
+    "test:claude-longprompt": "tsx scripts/test-claude-longprompt.ts",
+    "test:content-live": "tsx scripts/test-content-live.ts",
+    "test:vision-live": "tsx scripts/test-vision-live.ts",
+    "test:imagegen-live": "tsx scripts/test-imagegen-live.ts",
+    "test:localphotos": "tsx scripts/test-localphotos.ts",
+    "test:vs16-live": "tsx scripts/test-vs16-live.ts",
+    "harness:editor": "tsx scripts/harness-editor.ts"
+  },
+  "dependencies": {
+    "next": "^15.0.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "better-sqlite3": "^11.5.0",
+    "playwright": "^1.48.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.9.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

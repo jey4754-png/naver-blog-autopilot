@@ -1,0 +1,221 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body { margin:0; padding:0; height:100%; font-family: sans-serif; }
+  body { position: relative; height: 900px; }
+  .se-popup-dim { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:50; }
+  .se-popup-container { position:fixed; top:200px; left:400px; z-index:51; background:white; border:1px solid #ccc; padding:16px; }
+  .se-help-container { position:absolute; top:0; right:0; width:260px; height:600px; background:#eef; z-index:20; }
+  .se-toolbar { position:relative; z-index:10; padding:8px; border-bottom:1px solid #ddd; }
+  .se-toolbar button { margin-right:4px; }
+  .se-text-format-dropdown { display:none; border:1px solid #ccc; padding:4px; }
+  .se-color-palette-wrap { display:none; border:1px solid #ccc; padding:4px; }
+  .se-section-documentTitle .se-text-paragraph { font-size:24px; padding:8px; min-height:32px; outline:none; }
+  .se-main-container { position:relative; }
+  .se-content { min-height:400px; padding:8px; position:relative; }
+  .se-component { border:1px dashed transparent; margin-bottom:4px; padding:4px; }
+  .se-component:hover { border-color:#ccc; }
+  .se-text-paragraph { min-height:24px; outline:none; }
+  .se-quotation .se-text-paragraph { font-style:italic; border-left:3px solid #999; padding-left:8px; }
+  .se-image img { max-width:200px; display:block; }
+  .se-caption { min-height:0; height:0; overflow:hidden; outline:none; font-size:12px; color:#666; }
+  .se-caption.se-is-on { height:auto; min-height:20px; overflow:visible; border-top:1px dashed #ccc; }
+  .se-sidebar-container-library { position:absolute; top:0; right:0; width:300px; height:795px; background:#ffe; z-index:30; display:none; }
+  .se-flayer-unified-toolbar-wrapper { position:fixed; left:0; right:0; bottom:0; height:56px; background:#f5f5f5; border-top:1px solid #ddd; z-index:15; }
+  .se-flayer-unified-toolbar { padding:8px; }
+  .se-flayer-unified-search-input { width:300px; }
+</style>
+</head>
+<body>
+  <script>
+    window.__harness = {
+      strikethroughClicked: false,
+      popupCancelled: false,
+      safeZoneClicked: 0,
+      searchBarTouched: false,
+    };
+    // ⚠️ 7-26 시나리오 전용: ?noBody=1 이면 본문 후보가 전부 없는 상태를 재현한다.
+    if (new URLSearchParams(location.search).get("noBody") === "1") {
+      document.addEventListener("DOMContentLoaded", () => {
+        document.querySelector(".se-main-container")?.remove();
+      });
+    }
+  </script>
+
+  <div class="se-popup-dim" id="popupDim"></div>
+  <div class="se-popup-container" id="restorePopup">
+    <p>작성 중인 글이 있습니다. 이어서 쓰시겠습니까?</p>
+    <button class="se-popup-button-ok">이어서 쓰기</button>
+    <button class="se-popup-button-cancel">취소</button>
+  </div>
+
+  <div class="se-help-container" id="helpPanel">
+    <button class="se-help-panel-close-button">도움말 닫기</button>
+    <p>스마트에디터 사용법 안내...</p>
+  </div>
+
+  <div class="se-toolbar">
+    <button class="se-strikethrough-toolbar-button" id="strikeBtn">취소선</button>
+    <button class="se-text-format-toolbar-button" id="textFormatBtn">문단서식</button>
+    <div class="se-text-format-dropdown" id="formatDropdown">
+      <button class="se-toolbar-option-text-format-sectionTitle-button">소제목</button>
+      <button class="se-toolbar-option-text-format-text-button">본문</button>
+      <button class="se-toolbar-option-text-format-quotation-button">인용구</button>
+    </div>
+    <button class="se-insert-horizontal-line-default-toolbar-button" id="dividerBtn">구분선</button>
+    <button class="se-bold-toolbar-button" id="boldBtn">굵게</button>
+    <button class="se-background-color-toolbar-button" id="bgColorBtn">배경색</button>
+    <div class="se-color-palette-wrap" id="colorPalette">
+      <button title="#fff8b2">노랑</button>
+      <button class="se-color-palette-no-color">없음</button>
+    </div>
+    <button class="se-image-toolbar-button" id="imageBtn">사진</button>
+    <input type="file" id="fileInput" style="display:none" accept="image/*" />
+  </div>
+
+  <div class="se-section-documentTitle">
+    <div class="se-text-paragraph" contenteditable="true" id="titleEl" data-placeholder="제목"></div>
+  </div>
+
+  <div class="se-main-container">
+    <div class="se-content" id="seContent">
+      <div class="se-component se-section-text">
+        <div class="se-text-paragraph" contenteditable="true"></div>
+      </div>
+    </div>
+    <div class="se-sidebar-container-library" id="sidebar">
+      <button class="se-sidebar-close-button">팝업 닫기</button>
+      <p>라이브러리</p>
+    </div>
+  </div>
+
+  <div class="se-flayer-unified-toolbar-wrapper">
+    <div class="se-flayer-unified-toolbar se-flayer-unified-toolbar--expanded">
+      <input class="se-flayer-unified-search-input" id="searchInput" placeholder="글감 검색" />
+    </div>
+  </div>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+
+    $("#popupCancelBtnPlaceholder"); // no-op
+
+    document.querySelector(".se-popup-button-cancel").addEventListener("click", () => {
+      window.__harness.popupCancelled = true;
+      $("#restorePopup").style.display = "none";
+      $("#popupDim").style.display = "none";
+    });
+
+    document.querySelector("#strikeBtn").addEventListener("click", () => {
+      window.__harness.strikethroughClicked = true;
+    });
+
+    document.querySelector("#helpPanel .se-help-panel-close-button").addEventListener("click", () => {
+      $("#helpPanel").style.display = "none";
+    });
+
+    document.querySelector("#sidebar .se-sidebar-close-button").addEventListener("click", () => {
+      $("#sidebar").style.display = "none";
+    });
+
+    // 실제 리치텍스트 에디터 툴바처럼, 버튼을 눌러도 본문의 포커스/선택이 유지되도록
+    // mousedown 캡처 단계에서 "직전까지 포커스돼 있던 편집 영역"을 기억해둔다.
+    // (click 시점엔 이미 버튼 자신으로 activeElement 가 넘어가 있어 그걸 쓰면 안 된다.)
+    let lastEditableFocus = null;
+    document.addEventListener(
+      "mousedown",
+      () => {
+        if (document.activeElement && document.activeElement.isContentEditable) {
+          lastEditableFocus = document.activeElement;
+        }
+      },
+      true,
+    );
+
+    document.querySelector("#textFormatBtn").addEventListener("click", () => {
+      const dd = $("#formatDropdown");
+      dd.style.display = dd.style.display === "block" ? "none" : "block";
+    });
+
+    document.querySelector(".se-toolbar-option-text-format-quotation-button").addEventListener("click", () => {
+      const active = (lastEditableFocus || document.activeElement).closest(".se-component");
+      if (active) active.classList.add("se-quotation");
+      $("#formatDropdown").style.display = "none";
+    });
+    document.querySelector(".se-toolbar-option-text-format-text-button").addEventListener("click", () => {
+      $("#formatDropdown").style.display = "none";
+    });
+    document.querySelector(".se-toolbar-option-text-format-sectionTitle-button").addEventListener("click", () => {
+      $("#formatDropdown").style.display = "none";
+    });
+
+    document.querySelector("#dividerBtn").addEventListener("click", () => {
+      const div = document.createElement("div");
+      div.className = "se-component se-horizontalLine";
+      div.innerHTML = "<hr/>";
+      $("#seContent").appendChild(div);
+    });
+
+    document.querySelector("#bgColorBtn").addEventListener("click", () => {
+      const p = $("#colorPalette");
+      p.style.display = p.style.display === "block" ? "none" : "block";
+    });
+    document.querySelector("button[title='#fff8b2']").addEventListener("click", () => {
+      document.execCommand("hiliteColor", false, "#fff8b2");
+      $("#colorPalette").style.display = "none";
+    });
+    document.querySelector(".se-color-palette-no-color").addEventListener("click", () => {
+      document.execCommand("hiliteColor", false, "transparent");
+      $("#colorPalette").style.display = "none";
+    });
+    document.querySelector("#boldBtn").addEventListener("click", () => {
+      document.execCommand("bold", false, undefined);
+    });
+
+    // ── 이미지 업로드 (7-7 / 7-18) ──
+    document.querySelector("#imageBtn").addEventListener("click", () => {
+      $("#fileInput").click();
+    });
+    document.querySelector("#fileInput").addEventListener("change", () => {
+      const comp = document.createElement("div");
+      comp.className = "se-component se-image";
+      comp.innerHTML =
+        '<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7" />' +
+        '<div class="se-caption se-is-empty" contenteditable="true" data-placeholder="캡션을 입력하세요"></div>';
+      $("#seContent").appendChild(comp);
+      $("#sidebar").style.display = "block"; // 실제 네이버처럼 사진 넣으면 우측 도크가 열린다.
+
+      comp.addEventListener("click", (ev) => {
+        if (ev.target.closest(".se-caption")) return;
+        comp.querySelector(".se-caption").classList.add("se-is-on");
+      });
+      const cap = comp.querySelector(".se-caption");
+      cap.addEventListener("input", () => {
+        if (cap.textContent.trim().length > 0) cap.classList.remove("se-is-empty");
+      });
+    });
+
+    // ── 하단 글감 검색바로 타이핑이 새는지 감시 (7-6) ──
+    document.querySelector("#searchInput").addEventListener("input", () => {
+      window.__harness.searchBarTouched = true;
+    });
+    document.querySelector("#searchInput").addEventListener("focus", () => {
+      window.__harness.searchBarTouched = true;
+    });
+
+    // ── 컴포넌트 바깥(빈 영역) 클릭 시 새 문단 컴포넌트를 만들고 포커스한다 ──
+    // (7-5/7-6 탈출 클릭이 실제로 "다음 문단"으로 이어지는지 확인하기 위한 최소 동작)
+    document.querySelector("#seContent").addEventListener("mousedown", (ev) => {
+      if (ev.target.closest(".se-component")) return; // 컴포넌트 안 클릭은 무시
+      window.__harness.safeZoneClicked++;
+      const p = document.createElement("div");
+      p.className = "se-component se-section-text";
+      p.innerHTML = '<div class="se-text-paragraph" contenteditable="true"></div>';
+      $("#seContent").appendChild(p);
+      p.querySelector(".se-text-paragraph").focus();
+    });
+  </script>
+</body>
+</html>

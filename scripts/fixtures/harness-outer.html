@@ -1,0 +1,14 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8" /><title>harness</title>
+<style>html,body{margin:0;padding:0;}iframe{width:100%;height:900px;border:0;display:block;}</style>
+</head>
+<body>
+  <iframe id="mainFrame" src="./harness-frame.html"></iframe>
+  <script>
+    // 바깥 페이지 쿼리스트링을 iframe 에 그대로 넘긴다 (예: ?noBody=1).
+    const qs = location.search;
+    if (qs) document.getElementById("mainFrame").src = "./harness-frame.html" + qs;
+  </script>
+</body>
+</html>
