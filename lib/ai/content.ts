@@ -1,9 +1,11 @@
+import { z } from "zod";
 import { runClaudeJson } from "@/lib/claude";
 import { jobLog } from "@/lib/log";
 import {
   IdeaListSchema,
   draftSchemaFor,
   type Draft,
+  type DraftSection,
   type Idea,
   type PhotoSource,
   type ScrapedSource,
@@ -123,4 +125,62 @@ export function sanitizeDraft(jobId: string, draft: Draft): Draft {
     jobLog(jobId, "warn", `본문에 없는 highlight ${dropped}개를 지어내 버렸습니다(자리 자체는 유지)`);
   }
   return { ...draft, sections };
+}
+
+// ── "AI로 다듬기" (발행 전 사용자가 화면에서 요청) ────────────
+// ⚠️ 섹션의 개수·순서·타입은 절대 바꾸지 않는다. image 섹션은 이미 사진이 배정된
+// 자리(section_index)와 연결되어 있어서, AI가 섹션을 추가/삭제/재배열하면 사진이
+// 엉뚱한 자리로 밀린다. 그래서 글자가 있는 섹션(heading/paragraph/quote)의 text만
+// 골라 인덱스와 함께 보내고, 돌아온 값을 같은 인덱스에만 되끼워 넣는다.
+const PolishItemSchema = z.object({
+  index: z.number().int().min(0),
+  text: z.string().min(1),
+  highlight: z.string().optional(),
+});
+const PolishResponseSchema = z.object({ items: z.array(PolishItemSchema) });
+
+type TextBearingSection = Extract<DraftSection, { type: "heading" | "paragraph" | "quote" }>;
+
+export async function polishDraftText(
+  draft: Draft,
+): Promise<{ ok: true; draft: Draft } | { ok: false; error: string }> {
+  const editable = draft.sections
+    .map((s, i) => ({ s: s as TextBearingSection, i }))
+    .filter((x): x is { s: TextBearingSection; i: number } =>
+      x.s.type === "heading" || x.s.type === "paragraph" || x.s.type === "quote",
+    );
+
+  if (editable.length === 0) return { ok: true, draft };
+
+  const listing = editable.map(({ s, i }) => `${i} (${s.type}): ${s.text}`).join("\n");
+  const prompt = `다음은 네이버 블로그 글의 문단·소제목·인용구들이다. 각 항목을 더 읽기 쉽게 다듬어라.
+- 사실이나 숫자를 새로 지어내지 마라. 원문에 있는 내용만 자연스럽게 다듬는다.
+- 문장을 짧게 끊고, 어색하거나 늘어지는 표현을 고쳐라. 전체적인 뜻과 어투(구어체/전문가체 등)는 유지하라.
+- quote 항목은 15~30자의 짧은 한 줄을 유지하라.
+- paragraph 항목의 highlight 는, 다듬은 뒤의 text 안에 실제로 있는 문구만 적어라. 강조할 게 마땅치 않으면 생략하라.
+- 마크다운 기호(**, ~~, #, >, 백틱, - 목록)는 쓰지 마라.
+- 반드시 아래 모든 index를 하나도 빠짐없이 포함해 응답하라.
+
+${listing}
+
+출력 형식: { "items": [{ "index": number, "text": string, "highlight"?: string }, ...] }`;
+
+  const res = await runClaudeJson(prompt, PolishResponseSchema, { retries: 2 });
+  if (!res.ok) return { ok: false, error: res.error };
+
+  const byIndex = new Map(res.data.items.map((it) => [it.index, it]));
+  const newSections = draft.sections.map((s, i) => {
+    const patch = byIndex.get(i);
+    if (!patch) return s;
+    if (s.type === "paragraph") {
+      const highlight = patch.highlight && patch.text.includes(patch.highlight) ? patch.highlight : undefined;
+      return { ...s, text: patch.text, highlight };
+    }
+    if (s.type === "heading" || s.type === "quote") {
+      return { ...s, text: patch.text };
+    }
+    return s;
+  });
+
+  return { ok: true, draft: { ...draft, sections: newSections } };
 }

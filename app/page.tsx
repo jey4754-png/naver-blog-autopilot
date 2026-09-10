@@ -491,7 +491,7 @@ function JobDetailView({
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editSections, setEditSections] = useState<DraftSection[]>([]);
-  const [busy, setBusy] = useState<"save" | "republish" | null>(null);
+  const [busy, setBusy] = useState<"save" | "republish" | "polish" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const startEditing = () => {
@@ -533,6 +533,25 @@ function JobDetailView({
   const saveAndClose = async () => {
     const ok = await saveEdits();
     if (ok) setEditing(false);
+  };
+
+  const polishText = async () => {
+    if (!draft) return;
+    const ok = await saveEdits();
+    if (!ok) return;
+    setBusy("polish");
+    setActionError(null);
+    try {
+      const res = await jsonFetch<{ title: string; sections: DraftSection[] }>(
+        `/api/jobs/${detail.job.id}/drafts/${draft.id}/polish`,
+        { method: "POST" },
+      );
+      setEditSections(res.sections);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
   };
 
   const republish = async () => {
@@ -622,9 +641,12 @@ function JobDetailView({
                 <SectionEditor key={i} section={s} onChange={(patch) => updateSection(i, patch)} onRemove={() => removeSection(i)} />
               ))}
 
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                 <button className="btn" onClick={() => setEditing(false)} disabled={busy !== null}>
                   취소
+                </button>
+                <button className="btn" onClick={polishText} disabled={busy !== null}>
+                  {busy === "polish" ? "다듬는 중... (1분 정도)" : "AI로 다듬기"}
                 </button>
                 <button className="btn" onClick={saveAndClose} disabled={busy !== null}>
                   {busy === "save" ? "저장 중..." : "저장"}
