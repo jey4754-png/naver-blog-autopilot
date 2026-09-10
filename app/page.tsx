@@ -502,9 +502,9 @@ function JobDetailView({ detail, logs }: { detail: JobDetail; logs: { level: str
               올라간 글 보기
             </a>
           )}
-          {post.screenshot && (
+          {post.screenshotUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={`/api/file?path=${encodeURIComponent(post.screenshot.split("/data/")[1] ?? "")}`} alt="완성 화면 미리보기" className="preview-img" />
+            <img src={post.screenshotUrl} alt="완성 화면 미리보기" className="preview-img" />
           )}
         </div>
       )}
@@ -554,9 +554,9 @@ function SectionPreview({
   const img = images.find((im) => im.section_index === index && im.verdict_ok === 1);
   return (
     <div className="preview-section">
-      {img?.local_path ? (
+      {img?.fileUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={`/api/file?path=${encodeURIComponent(img.local_path.split("/data/")[1] ?? "")}`} alt={section.caption ?? section.query} className="preview-img" />
+        <img src={img.fileUrl} alt={section.caption ?? section.query} className="preview-img" />
       ) : (
         <div className="badge-warn">사진 없음: {section.query}</div>
       )}

@@ -70,6 +70,7 @@ export interface JobDetail {
     id: string;
     query: string;
     local_path: string | null;
+    fileUrl: string | null;
     source_site: string;
     verdict_ok: number;
     verdict_reason: string | null;
@@ -80,6 +81,7 @@ export interface JobDetail {
     status: string;
     blog_url: string | null;
     screenshot: string | null;
+    screenshotUrl: string | null;
     note: string | null;
     published_at: string | null;
   }[];
