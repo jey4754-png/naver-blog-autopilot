@@ -293,6 +293,43 @@ async function runTemplateJob(job: JobRow): Promise<void> {
   await publishAndRecord(job.id, draftId, draft, imagePaths, true);
 }
 
+// 사용자가 화면에서 초안을 고친 뒤 "이 내용으로 다시 만들기"를 눌렀을 때 쓰인다.
+// 자료 수집·글감·본문 생성은 다시 하지 않고, 이미 저장된(수정된) 초안과 이미 채워둔
+// 사진을 그대로 써서 발행 단계만 다시 실행한다.
+export async function republishDraft(jobId: string, draftId: string): Promise<void> {
+  const db = getDb();
+  const job = db.prepare(`SELECT id, mode FROM jobs WHERE id = ?`).get(jobId) as
+    | { id: string; mode: WriteMode }
+    | undefined;
+  if (!job) {
+    jobLog(jobId, "error", "잡을 찾을 수 없습니다");
+    return;
+  }
+  const draftRow = db
+    .prepare(`SELECT id, title, body_json FROM drafts WHERE id = ? AND job_id = ?`)
+    .get(draftId, jobId) as { id: string; title: string; body_json: string } | undefined;
+  if (!draftRow) {
+    jobLog(jobId, "error", "초안을 찾을 수 없습니다");
+    return;
+  }
+  const draft: Draft = { title: draftRow.title, sections: JSON.parse(draftRow.body_json) };
+
+  const imageRows = db
+    .prepare(
+      `SELECT section_index, local_path FROM images
+       WHERE job_id = ? AND draft_id = ? AND verdict_ok = 1 AND local_path IS NOT NULL`,
+    )
+    .all(jobId, draftId) as { section_index: number | null; local_path: string }[];
+  const imagePaths = new Map<number, string>();
+  for (const row of imageRows) {
+    if (row.section_index !== null) imagePaths.set(row.section_index, row.local_path);
+  }
+
+  setJobStage(jobId, { status: "publishing", stage: "publishing", error: "" });
+  jobLog(jobId, "info", "수정한 내용으로 다시 시도합니다");
+  await publishAndRecord(jobId, draftId, draft, imagePaths, job.mode !== "auto");
+}
+
 export async function runJob(jobId: string): Promise<void> {
   const db = getDb();
   const job = db.prepare(`SELECT id, keyword, mode, inputs FROM jobs WHERE id = ?`).get(jobId) as

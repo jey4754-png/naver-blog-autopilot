@@ -219,7 +219,8 @@ textarea {
 }
 .field input[type="text"],
 .field textarea,
-.field select {
+.field select,
+.editor-input {
   width: 100%;
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -227,7 +228,8 @@ textarea {
   padding: 9px 10px;
   font-size: 14px;
 }
-.field textarea {
+.field textarea,
+textarea.editor-input {
   min-height: 90px;
   resize: vertical;
 }

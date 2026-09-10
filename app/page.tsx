@@ -96,12 +96,14 @@ export default function Page() {
       .catch(() => setDetail(null));
   }, []);
 
+  const [streamKey, setStreamKey] = useState(0);
+
   useEffect(() => {
     if (!selectedId) return;
     setLogs([]);
     loadDetail(selectedId);
 
-    const es = new EventSource(`/api/jobs/${selectedId}/stream`);
+    const es = new EventSource(`/api/jobs/${selectedId}/stream?r=${streamKey}`);
     es.addEventListener("log", (ev) => {
       const data = JSON.parse((ev as MessageEvent).data);
       setLogs((prev) => [...prev, { level: data.level, message: data.message }]);
@@ -114,7 +116,10 @@ export default function Page() {
     });
     es.onerror = () => es.close();
     return () => es.close();
-  }, [selectedId, loadDetail, refreshJobs, refreshUsage]);
+  }, [selectedId, streamKey, loadDetail, refreshJobs, refreshUsage]);
+
+  // 초안을 고쳐서 다시 발행을 시도한 뒤, 로그 스트림을 새로 연결하기 위해 부른다.
+  const reconnectStream = useCallback(() => setStreamKey((k) => k + 1), []);
 
   const patchSettings = useCallback(
     (patch: Partial<Settings>) => {
@@ -446,6 +451,11 @@ export default function Page() {
             <JobDetailView
               detail={detail}
               logs={logs}
+              onChanged={() => {
+                loadDetail(detail.job.id);
+                reconnectStream();
+                refreshJobs();
+              }}
             />
           )}
         </div>
@@ -465,10 +475,86 @@ export default function Page() {
   );
 }
 
-function JobDetailView({ detail, logs }: { detail: JobDetail; logs: { level: string; message: string }[] }) {
+function JobDetailView({
+  detail,
+  logs,
+  onChanged,
+}: {
+  detail: JobDetail;
+  logs: { level: string; message: string }[];
+  onChanged: () => void;
+}) {
   const draft = detail.drafts[detail.drafts.length - 1];
   const post = detail.posts[0];
   const inProgress = !["done", "failed", "canceled"].includes(detail.job.status);
+
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editSections, setEditSections] = useState<DraftSection[]>([]);
+  const [busy, setBusy] = useState<"save" | "republish" | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const startEditing = () => {
+    if (!draft) return;
+    setEditTitle(draft.title);
+    setEditSections(draft.sections.map((s) => ({ ...s })));
+    setActionError(null);
+    setEditing(true);
+  };
+
+  const updateSection = (i: number, patch: Partial<DraftSection>) => {
+    setEditSections((prev) => prev.map((s, idx) => (idx === i ? ({ ...s, ...patch } as DraftSection) : s)));
+  };
+
+  const removeSection = (i: number) => {
+    setEditSections((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  const saveEdits = async (): Promise<boolean> => {
+    if (!draft) return false;
+    setBusy("save");
+    setActionError(null);
+    try {
+      await jsonFetch(`/api/jobs/${detail.job.id}/drafts/${draft.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: editTitle, sections: editSections }),
+      });
+      onChanged();
+      return true;
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveAndClose = async () => {
+    const ok = await saveEdits();
+    if (ok) setEditing(false);
+  };
+
+  const republish = async () => {
+    if (!draft) return;
+    const ok = await saveEdits();
+    if (!ok) return;
+    setBusy("republish");
+    setActionError(null);
+    try {
+      await jsonFetch(`/api/jobs/${detail.job.id}/republish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftId: draft.id }),
+      });
+      setEditing(false);
+      onChanged();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <div>
@@ -509,16 +595,124 @@ function JobDetailView({ detail, logs }: { detail: JobDetail; logs: { level: str
         </div>
       )}
 
-      {draft && (
+      {draft && !inProgress && (
         <div>
-          <div className="section-title" style={{ marginTop: 0 }}>
-            글 미리보기
+          <div
+            className="section-title"
+            style={{ marginTop: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}
+          >
+            <span>글 미리보기</span>
+            {!editing && (
+              <button className="btn" onClick={startEditing}>
+                수정하기
+              </button>
+            )}
           </div>
-          {draft.sections.map((s, i) => (
-            <SectionPreview key={i} section={s} images={detail.images} index={i} />
-          ))}
+
+          {actionError && <div className="badge-warn" style={{ marginBottom: 10 }}>{actionError}</div>}
+
+          {editing ? (
+            <div className="form-card">
+              <div className="field">
+                <label>제목</label>
+                <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+              </div>
+
+              {editSections.map((s, i) => (
+                <SectionEditor key={i} section={s} onChange={(patch) => updateSection(i, patch)} onRemove={() => removeSection(i)} />
+              ))}
+
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button className="btn" onClick={() => setEditing(false)} disabled={busy !== null}>
+                  취소
+                </button>
+                <button className="btn" onClick={saveAndClose} disabled={busy !== null}>
+                  {busy === "save" ? "저장 중..." : "저장"}
+                </button>
+                <button className="btn btn-primary" onClick={republish} disabled={busy !== null}>
+                  {busy === "republish" ? "다시 만드는 중..." : "이 내용으로 다시 만들기"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {draft.sections.map((s, i) => (
+                <SectionPreview key={i} section={s} images={detail.images} index={i} />
+              ))}
+              <button className="btn btn-primary" onClick={republish} disabled={busy !== null} style={{ marginTop: 12 }}>
+                {busy === "republish" ? "다시 만드는 중..." : "이 내용으로 다시 만들기"}
+              </button>
+            </>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function SectionEditor({
+  section,
+  onChange,
+  onRemove,
+}: {
+  section: DraftSection;
+  onChange: (patch: Partial<DraftSection>) => void;
+  onRemove: () => void;
+}) {
+  const label: Record<DraftSection["type"], string> = {
+    heading: "소제목",
+    paragraph: "문단",
+    quote: "인용구",
+    divider: "구분선",
+    image: "사진",
+  };
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{label[section.type]}</span>
+        <button className="btn btn-ghost" onClick={onRemove} style={{ padding: "2px 8px", fontSize: 12 }}>
+          삭제
+        </button>
+      </div>
+
+      {(section.type === "heading" || section.type === "quote") && (
+        <input
+          type="text"
+          className="editor-input"
+          value={section.text}
+          onChange={(e) => onChange({ text: e.target.value } as Partial<DraftSection>)}
+        />
+      )}
+
+      {section.type === "paragraph" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <textarea
+            className="editor-input"
+            value={section.text}
+            onChange={(e) => onChange({ text: e.target.value } as Partial<DraftSection>)}
+          />
+          <input
+            type="text"
+            className="editor-input"
+            placeholder="형광펜으로 강조할 문구 (본문 안에 있는 글자 그대로, 비워두면 없음)"
+            value={section.highlight ?? ""}
+            onChange={(e) => onChange({ highlight: e.target.value || undefined } as Partial<DraftSection>)}
+          />
+        </div>
+      )}
+
+      {section.type === "image" && (
+        <input
+          type="text"
+          className="editor-input"
+          placeholder="사진 설명(캡션)"
+          value={section.caption ?? ""}
+          onChange={(e) => onChange({ caption: e.target.value || undefined } as Partial<DraftSection>)}
+        />
+      )}
+
+      {section.type === "divider" && <div style={{ color: "var(--text-dim)", fontSize: 13 }}>─── 구분선 ───</div>}
     </div>
   );
 }
